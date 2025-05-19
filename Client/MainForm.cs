@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
@@ -22,30 +18,39 @@ namespace Client
         public MainForm()
         {
             InitializeComponent();
-
-            ConnectToServer();
         }
 
-        private void RefreshFileList()
+        class FileItem
+        {
+            public string Name { get; set; }
+            public bool IsDirectory { get; set; }
+
+            public override string ToString()
+            {
+                return IsDirectory ? $"[Dir]{Name}" : $"[File]{Name}";
+            }
+        }
+
+        private async Task RefreshFileListAsync()
         {
             try
             {
-                if (string.IsNullOrEmpty(CurrentUser))
-                {
-                    MessageBox.Show("Người dùng chưa được xác định.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
+                btnDelete.Enabled = false;
+                btnDownload.Enabled = false;
                 listFoder.Items.Clear();
-                ConnectToServer();
-                SendRequest($"LIST|{CurrentUser}");
-                string response = ReceiveResponse();
-                Console.WriteLine($"Phản hồi LIST: {response}");
+
+                await SendRequestAsync($"LIST|{CurrentUser}");
+                string response = await ReceiveResponseAsync();
 
                 if (response.StartsWith("SUCCESS"))
                 {
-                    string[] items = response.Split('|').Skip(1).ToArray();
-                    listFoder.Items.AddRange(items);
+                    var parts = response.Split('|').Skip(1).Where(x => !string.IsNullOrEmpty(x));
+                    foreach (var item in parts)
+                    {
+                        bool isDir = item.StartsWith("[Dir]");
+                        string name = isDir ? item.Substring(5) : item.Substring(6);
+                        listFoder.Items.Add(new FileItem { Name = name, IsDirectory = isDir });
+                    }
                 }
                 else
                 {
@@ -55,61 +60,67 @@ namespace Client
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi làm mới danh sách tệp: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                Disconnect();
+                RedirectToLogin();
             }
         }
 
-        private void ConnectToServer()
+        public void SetConnection(TcpClient tcpClient, NetworkStream networkStream)
+        {
+            client = tcpClient;
+            stream = networkStream;
+        }
+
+        private async Task SendRequestAsync(string request)
         {
             try
             {
-                client = new TcpClient("localhost", 5000);
-                stream = client.GetStream();
+                if (client == null || !client.Connected || stream == null)
+                {
+                    throw new Exception("Không có kết nối đến server. Vui lòng đăng nhập lại.");
+                }
+
+                request = request.Trim();
+                byte[] data = Encoding.UTF8.GetBytes(request + "\n");
+                await stream.WriteAsync(data, 0, data.Length);
+                await stream.FlushAsync();
+                Console.WriteLine($"[SendRequest] Sent: {request}");
             }
             catch (Exception ex)
             {
-                throw new Exception($"Không thể kết nối đến server: {ex.Message}");
+                Console.WriteLine($"[SendRequest] Error: {ex.Message}");
+                throw;
             }
         }
 
-        private void SendRequest(string request)
+        private async Task<string> ReceiveResponseAsync()
         {
             try
             {
-                if (client == null || !client.Connected)
-                    ConnectToServer();
+                byte[] buffer = new byte[8192];
+                StringBuilder responseBuilder = new StringBuilder();
+                int bytesRead;
 
-                byte[] data = Encoding.UTF8.GetBytes(request);
-                stream.Write(data, 0, data.Length);
-                stream.Flush();
+                do
+                {
+                    bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                    if (bytesRead == 0)
+                        throw new IOException("Server đã đóng kết nối.");
+
+                    string chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    responseBuilder.Append(chunk);
+
+                    if (chunk.Contains("\n"))
+                        break;
+                } while (bytesRead > 0);
+
+                string response = responseBuilder.ToString().Trim();
+                Console.WriteLine($"[ReceiveResponse] Received: {response}");
+                return response;
             }
             catch (Exception ex)
             {
-                throw new Exception($"Lỗi khi gửi yêu cầu: {ex.Message}");
-            }
-        }
-
-        private string ReceiveResponse()
-        {
-            try
-            {
-                byte[] buffer = new byte[4096];
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                if (bytesRead == 0)
-                    throw new IOException("Server đã đóng kết nối.");
-
-                return Encoding.UTF8.GetString(buffer, 0, bytesRead);
-            }
-            catch (IOException ex)
-            {
-                throw new Exception($"Lỗi kết nối: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Lỗi khi nhận phản hồi: {ex.Message}");
+                Console.WriteLine($"[ReceiveResponse] Error: {ex.Message}");
+                throw;
             }
         }
 
@@ -121,31 +132,40 @@ namespace Client
                 client?.Close();
                 client = null;
                 stream = null;
+                Console.WriteLine("[Disconnect] Connection closed.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Lỗi khi ngắt kết nối: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Console.WriteLine($"[Disconnect] Error: {ex.Message}");
             }
         }
 
-        public void SetConnection(TcpClient tcpClient, NetworkStream networkStream)
+        private void RedirectToLogin()
         {
-            client = tcpClient;
-            stream = networkStream;
+            MessageBox.Show("Mất kết nối với server. Vui lòng đăng nhập lại.", "Lỗi kết nối", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Disconnect();
+            using (var loginForm = new LoginForm())
+            {
+                this.Hide();
+                loginForm.ShowDialog();
+                this.Close();
+            }
         }
 
-        private void MainForm_Load(object sender, EventArgs e)
+        private async void MainForm_Load(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(CurrentUser))
             {
                 MessageBox.Show("Không thể tải danh sách tệp: Người dùng chưa đăng nhập.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Close();
+                RedirectToLogin();
                 return;
             }
-            RefreshFileList();
+            btnDelete.Enabled = false;
+            btnDownload.Enabled = false;
+            await RefreshFileListAsync();
         }
 
-        private void btnUpload_Click(object sender, EventArgs e)
+        private async void btnUpload_Click(object sender, EventArgs e)
         {
             try
             {
@@ -154,28 +174,53 @@ namespace Client
                     if (ofd.ShowDialog() == DialogResult.OK)
                     {
                         string filename = Path.GetFileName(ofd.FileName);
-                        byte[] fileData = File.ReadAllBytes(ofd.FileName);
-                        string base64Data = Convert.ToBase64String(fileData);
+                        if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
+                        {
+                            MessageBox.Show("Tên tệp chứa ký tự không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
 
-                        ConnectToServer();
-                        SendRequest($"UPLOAD|{CurrentUser}|{filename}|{base64Data}");
-                        string response = ReceiveResponse();
+                        byte[] fileData;
+                        try
+                        {
+                            fileData = File.ReadAllBytes(ofd.FileName);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Không thể đọc tệp: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+
+                        if (fileData.Length == 0)
+                        {
+                            MessageBox.Show("Tệp rỗng, không thể tải lên.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                        if (fileData.Length > 100 * 1024 * 1024)
+                        {
+                            MessageBox.Show("Tệp quá lớn (giới hạn 100MB).", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+
+                        string base64Data = Convert.ToBase64String(fileData);
+                        Console.WriteLine($"[Upload] File: {filename}, Size: {fileData.Length} bytes, Base64 length: {base64Data.Length}");
+                        string request = $"UPLOAD|{CurrentUser}|{filename}|{base64Data}";
+                        await SendRequestAsync(request);
+                        string response = await ReceiveResponseAsync();
+
                         MessageBox.Show(response, "Kết quả tải lên", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                        RefreshFileList();
+                        await RefreshFileListAsync();
                     }
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi tải lên: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                Disconnect();
+                RedirectToLogin();
             }
         }
 
-        private void btnDownload_Click(object sender, EventArgs e)
+        private async void btnDownload_Click(object sender, EventArgs e)
         {
             if (listFoder.SelectedItem == null)
             {
@@ -183,12 +228,18 @@ namespace Client
                 return;
             }
 
+            FileItem selectedItem = listFoder.SelectedItem as FileItem;
+            if (selectedItem == null || selectedItem.IsDirectory)
+            {
+                MessageBox.Show("Chỉ có thể tải xuống tệp, không phải thư mục.", "Lỗi lựa chọn", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             try
             {
-                string filename = listFoder.SelectedItem.ToString();
-                ConnectToServer();
-                SendRequest($"DOWNLOAD|{CurrentUser}|{filename}");
-                string response = ReceiveResponse();
+                string filename = selectedItem.Name;
+                await SendRequestAsync($"DOWNLOAD|{CurrentUser}|{filename}");
+                string response = await ReceiveResponseAsync();
 
                 if (response.StartsWith("SUCCESS"))
                 {
@@ -213,38 +264,36 @@ namespace Client
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi tải xuống: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                Disconnect();
+                RedirectToLogin();
             }
         }
 
-        private void btnCreate_Click(object sender, EventArgs e)
+        private async void btnCreate_Click(object sender, EventArgs e)
         {
             try
             {
                 string dirName = Prompt.ShowDialog("Nhập tên thư mục:", "Tạo thư mục");
                 if (!string.IsNullOrEmpty(dirName))
                 {
-                    ConnectToServer();
-                    SendRequest($"CREATE_DIR|{CurrentUser}|{dirName}");
-                    string response = ReceiveResponse();
+                    if (Path.GetInvalidFileNameChars().Any(dirName.Contains))
+                    {
+                        MessageBox.Show("Tên thư mục chứa ký tự không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                    await SendRequestAsync($"CREATE_DIR|{CurrentUser}|{dirName}");
+                    string response = await ReceiveResponseAsync();
                     MessageBox.Show(response, "Kết quả tạo thư mục", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                    RefreshFileList();
+                    await RefreshFileListAsync();
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi tạo thư mục: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                Disconnect();
+                RedirectToLogin();
             }
         }
 
-        private void btnDelete_Click(object sender, EventArgs e)
+        private async void btnDelete_Click(object sender, EventArgs e)
         {
             if (listFoder.SelectedItem == null)
             {
@@ -252,22 +301,24 @@ namespace Client
                 return;
             }
 
+            FileItem selectedItem = listFoder.SelectedItem as FileItem;
+            if (selectedItem == null)
+            {
+                MessageBox.Show("Dữ liệu chọn không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
             try
             {
-                string itemName = listFoder.SelectedItem.ToString();
-                ConnectToServer();
-                SendRequest($"DELETE|{CurrentUser}|{itemName}");
-                string response = ReceiveResponse();
+                await SendRequestAsync($"DELETE|{CurrentUser}|{selectedItem.Name}");
+                string response = await ReceiveResponseAsync();
                 MessageBox.Show(response, "Kết quả xóa", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                RefreshFileList();
+                await RefreshFileListAsync();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi xóa: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                Disconnect();
+                RedirectToLogin();
             }
         }
 
@@ -275,6 +326,12 @@ namespace Client
         {
             Disconnect();
         }
+
+        private void listFoder_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            bool hasSelection = listFoder.SelectedItem != null;
+            btnDelete.Enabled = hasSelection;
+            btnDownload.Enabled = hasSelection && (listFoder.SelectedItem as FileItem)?.IsDirectory == false;
+        }
     }
 }
-

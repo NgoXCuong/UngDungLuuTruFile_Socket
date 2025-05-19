@@ -73,6 +73,7 @@
             this.listFoder.Name = "listFoder";
             this.listFoder.Size = new System.Drawing.Size(594, 344);
             this.listFoder.TabIndex = 0;
+            this.listFoder.SelectedIndexChanged += new System.EventHandler(this.listFoder_SelectedIndexChanged);
             // 
             // panel2
             // 

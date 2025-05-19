@@ -6,7 +6,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace Server
 {
@@ -14,7 +14,10 @@ namespace Server
     {
         private static readonly string storagePath = Path.Combine(Directory.GetCurrentDirectory(), "ServerStorage");
         private static readonly string usersFile = "users.txt";
-        private static Dictionary<string, string> users = new Dictionary<string, string>(); // username -> password
+        private static readonly Dictionary<string, string> users = new Dictionary<string, string>();
+        private static readonly int MaxConnections = 100;
+        private static int currentConnections = 0;
+
         static void Main()
         {
             Console.OutputEncoding = Encoding.UTF8;
@@ -31,7 +34,14 @@ namespace Server
             {
                 try
                 {
+                    if (currentConnections >= MaxConnections)
+                    {
+                        Console.WriteLine("Đạt giới hạn kết nối, từ chối client mới.");
+                        Thread.Sleep(1000);
+                        continue;
+                    }
                     TcpClient client = listener.AcceptTcpClient();
+                    Interlocked.Increment(ref currentConnections);
                     Thread clientThread = new Thread(() => HandleClient(client));
                     clientThread.Start();
                 }
@@ -54,10 +64,23 @@ namespace Server
             }
         }
 
+        static string HashPassword(string password)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+                StringBuilder builder = new StringBuilder();
+                foreach (byte b in bytes)
+                    builder.Append(b.ToString("x2"));
+                return builder.ToString();
+            }
+        }
+
         static void SaveUser(string username, string password)
         {
-            File.AppendAllText(usersFile, $"{username}:{password}\n");
-            users[username] = password;
+            string hashedPassword = HashPassword(password);
+            File.AppendAllText(usersFile, $"{username}:{hashedPassword}\n");
+            users[username] = hashedPassword;
         }
 
         static void HandleClient(TcpClient client)
@@ -68,12 +91,20 @@ namespace Server
             try
             {
                 stream = client.GetStream();
-                byte[] buffer = new byte[4096]; // Tăng kích thước buffer
+                stream.ReadTimeout = 10000;
+                byte[] buffer = new byte[8192];
+                StringBuilder incomingData = new StringBuilder();
 
                 while (client.Connected)
                 {
                     try
                     {
+                        if (!stream.DataAvailable)
+                        {
+                            Thread.Sleep(50);
+                            continue;
+                        }
+
                         int bytesRead = stream.Read(buffer, 0, buffer.Length);
                         if (bytesRead == 0)
                         {
@@ -81,105 +112,70 @@ namespace Server
                             break;
                         }
 
-                        string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        Console.WriteLine($"Đã nhận được yêu cầu: {request}");
-                        var parts = request.Split('|');
-                        string command = parts[0];
+                        string chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        incomingData.Append(chunk);
 
-                        switch (command)
+                        string data = incomingData.ToString();
+                        int newlineIndex;
+                        while ((newlineIndex = data.IndexOf('\n')) >= 0)
                         {
-                            case "LOGIN":
-                                currentUser = HandleLogin(parts, stream);
-                                Console.WriteLine($"currentUser sau đăng nhập: {currentUser}");
-                                break;
-                            case "LIST":
-                                if (parts.Length < 2)
-                                {
-                                    SendResponse(stream, "ERROR| Định dạng LIST không hợp lệ: Thiếu username");
+                            string request = data.Substring(0, newlineIndex).Trim();
+                            data = data.Substring(newlineIndex + 1);
+                            incomingData.Clear();
+                            incomingData.Append(data);
+
+                            if (string.IsNullOrEmpty(request)) continue;
+
+                            Console.WriteLine($"Đã nhận được yêu cầu: {request} (currentUser: {currentUser ?? "null"})");
+                            var parts = request.Split('|');
+                            string command = parts[0].ToUpperInvariant();
+
+                            switch (command)
+                            {
+                                case "LOGIN":
+                                    currentUser = HandleLogin(parts, stream);
                                     break;
-                                }
-                                string listUser = parts[1];
-                                if (string.IsNullOrEmpty(listUser))
-                                {
-                                    SendResponse(stream, "ERROR| Username không hợp lệ");
+                                case "REGISTER":
+                                    HandleRegister(parts, stream);
                                     break;
-                                }
-                                if (users.ContainsKey(listUser))
-                                {
-                                    HandleList(listUser, stream);
-                                }
-                                else
-                                {
-                                    SendResponse(stream, "ERROR| Người dùng không tồn tại hoặc chưa đăng nhập");
-                                }
-                                break;
-                            case "UPLOAD":
-                                if (parts.Length < 4)
-                                {
-                                    SendResponse(stream, "ERROR| Định dạng UPLOAD không hợp lệ");
+                                case "LIST":
+                                case "UPLOAD":
+                                case "DOWNLOAD":
+                                case "CREATE_DIR":
+                                case "DELETE":
+                                    if (string.IsNullOrEmpty(currentUser))
+                                    {
+                                        SendResponse(stream, "ERROR| Vui lòng đăng nhập trước");
+                                        break;
+                                    }
+                                    if (parts.Length < 2 || parts[1] != currentUser)
+                                    {
+                                        SendResponse(stream, "ERROR| Không có quyền truy cập");
+                                        break;
+                                    }
+                                    switch (command)
+                                    {
+                                        case "LIST":
+                                            HandleList(currentUser, stream);
+                                            break;
+                                        case "UPLOAD":
+                                            HandleUpload(parts, currentUser, stream);
+                                            break;
+                                        case "DOWNLOAD":
+                                            HandleDownload(parts, currentUser, stream);
+                                            break;
+                                        case "CREATE_DIR":
+                                            HandleCreateDir(parts, currentUser, stream);
+                                            break;
+                                        case "DELETE":
+                                            HandleDelete(parts, currentUser, stream);
+                                            break;
+                                    }
                                     break;
-                                }
-                                string uploadUser = parts[1];
-                                if (users.ContainsKey(uploadUser))
-                                {
-                                    HandleUpload(parts, uploadUser, stream);
-                                }
-                                else
-                                {
-                                    SendResponse(stream, "ERROR| Người dùng không tồn tại hoặc chưa đăng nhập");
-                                }
-                                break;
-                            case "DOWNLOAD":
-                                if (parts.Length < 3)
-                                {
-                                    SendResponse(stream, "ERROR| Định dạng DOWNLOAD không hợp lệ");
+                                default:
+                                    SendResponse(stream, "ERROR| Lệnh không hợp lệ");
                                     break;
-                                }
-                                string downloadUser = parts[1];
-                                if (users.ContainsKey(downloadUser))
-                                {
-                                    HandleDownload(parts, downloadUser, stream);
-                                }
-                                else
-                                {
-                                    SendResponse(stream, "ERROR| Người dùng không tồn tại hoặc chưa đăng nhập");
-                                }
-                                break;
-                            case "CREATE_DIR":
-                                if (parts.Length < 3)
-                                {
-                                    SendResponse(stream, "ERROR| Định dạng CREATE_DIR không hợp lệ");
-                                    break;
-                                }
-                                string createDirUser = parts[1];
-                                if (users.ContainsKey(createDirUser))
-                                {
-                                    HandleCreateDir(parts, createDirUser, stream);
-                                }
-                                else
-                                {
-                                    SendResponse(stream, "ERROR| Người dùng không tồn tại hoặc chưa đăng nhập");
-                                }
-                                break;
-                            case "DELETE":
-                                if (parts.Length < 3)
-                                {
-                                    SendResponse(stream, "ERROR| Định dạng DELETE không hợp lệ");
-                                    break;
-                                }
-                                string deleteUser = parts[1];
-                                if (users.ContainsKey(deleteUser))
-                                {
-                                    HandleDelete(parts, deleteUser, stream);
-                                }
-                                else
-                                {
-                                    SendResponse(stream, "ERROR| Người dùng không tồn tại hoặc chưa đăng nhập");
-                                }
-                                break;
-                            default:
-                                SendResponse(stream, "ERROR| Lệnh không hợp lệ");
-                                break;
+                            }
                         }
                     }
                     catch (IOException ex)
@@ -202,6 +198,7 @@ namespace Server
             {
                 stream?.Close();
                 client?.Close();
+                Interlocked.Decrement(ref currentConnections);
                 Console.WriteLine("Client đã đóng kết nối.");
             }
         }
@@ -216,6 +213,12 @@ namespace Server
 
             string username = parts[1];
             string password = parts[2];
+
+            if (string.IsNullOrEmpty(username) || Path.GetInvalidFileNameChars().Any(username.Contains))
+            {
+                SendResponse(stream, "ERROR| Tên người dùng không hợp lệ");
+                return;
+            }
 
             if (users.ContainsKey(username))
             {
@@ -240,10 +243,9 @@ namespace Server
             string username = parts[1];
             string password = parts[2];
 
-            if (users.TryGetValue(username, out string storedPassword) && storedPassword == password)
+            if (users.TryGetValue(username, out string storedPassword) && storedPassword == HashPassword(password))
             {
                 SendResponse(stream, "SUCCESS| Đăng nhập thành công");
-                Console.WriteLine($"Đăng nhập thành công: {username}"); // Log để debug
                 return username;
             }
             else
@@ -258,10 +260,10 @@ namespace Server
             try
             {
                 string userPath = Path.Combine(storagePath, username);
-                var files = Directory.GetFiles(userPath).Select(Path.GetFileName);
-                var dirs = Directory.GetDirectories(userPath).Select(Path.GetFileName);
+                var files = Directory.GetFiles(userPath).Select(f => $"[File]{Path.GetFileName(f)}");
+                var dirs = Directory.GetDirectories(userPath).Select(d => $"[Dir]{Path.GetFileName(d)}");
                 string result = string.Join("|", files.Concat(dirs));
-                SendResponse(stream, $"SUCCESS| {result}");
+                SendResponse(stream, $"SUCCESS|{result}");
             }
             catch (Exception ex)
             {
@@ -271,20 +273,41 @@ namespace Server
 
         static void HandleUpload(string[] parts, string username, NetworkStream stream)
         {
-            if (parts.Length != 3)
+            if (parts.Length != 4)
             {
-                SendResponse(stream, "ERROR| Định dạng tải lên không hợp lệ");
+                SendResponse(stream, $"ERROR| Định dạng tải lên không hợp lệ: Cần 4 phần, nhận được {parts.Length}");
                 return;
             }
 
             try
             {
-                string filename = parts[1];
-                string fileData = parts[2];
-                string filePath = Path.Combine(storagePath, username, filename);
+                string filename = parts[2];
+                string fileData = parts[3];
+                if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
+                {
+                    SendResponse(stream, "ERROR| Tên tệp không hợp lệ");
+                    return;
+                }
+                if (string.IsNullOrEmpty(fileData))
+                {
+                    SendResponse(stream, "ERROR| Dữ liệu tệp trống");
+                    return;
+                }
 
-                File.WriteAllBytes(filePath, Convert.FromBase64String(fileData));
+                byte[] data = Convert.FromBase64String(fileData);
+                if (data.Length > 100 * 1024 * 1024)
+                {
+                    SendResponse(stream, "ERROR| Tệp quá lớn");
+                    return;
+                }
+
+                string filePath = Path.Combine(storagePath, username, filename);
+                File.WriteAllBytes(filePath, data);
                 SendResponse(stream, "SUCCESS| Tệp đã được tải lên");
+            }
+            catch (FormatException)
+            {
+                SendResponse(stream, "ERROR| Dữ liệu tệp không hợp lệ");
             }
             catch (Exception ex)
             {
@@ -294,22 +317,22 @@ namespace Server
 
         static void HandleDownload(string[] parts, string username, NetworkStream stream)
         {
-            if (parts.Length != 2)
+            if (parts.Length != 3)
             {
-                SendResponse(stream, "ERROR| Định dạng tải xuống không hợp lệ");
+                SendResponse(stream, $"ERROR| Định dạng tải xuống không hợp lệ: Cần 3 phần, nhận được {parts.Length}");
                 return;
             }
 
             try
             {
-                string filename = parts[1];
+                string filename = parts[2];
                 string filePath = Path.Combine(storagePath, username, filename);
 
                 if (File.Exists(filePath))
                 {
                     byte[] fileData = File.ReadAllBytes(filePath);
                     string base64Data = Convert.ToBase64String(fileData);
-                    SendResponse(stream, $"SUCCESS| {base64Data}");
+                    SendResponse(stream, $"SUCCESS|{base64Data}");
                 }
                 else
                 {
@@ -324,17 +347,22 @@ namespace Server
 
         static void HandleCreateDir(string[] parts, string username, NetworkStream stream)
         {
-            if (parts.Length != 2)
+            if (parts.Length != 3)
             {
-                SendResponse(stream, "ERROR| Định dạng thư mục tạo không hợp lệ");
+                SendResponse(stream, $"ERROR| Định dạng tạo thư mục không hợp lệ: Cần 3 phần, nhận được {parts.Length}");
                 return;
             }
 
             try
             {
-                string dirName = parts[1];
-                string dirPath = Path.Combine(storagePath, username, dirName);
+                string dirName = parts[2];
+                if (string.IsNullOrEmpty(dirName) || Path.GetInvalidFileNameChars().Any(dirName.Contains))
+                {
+                    SendResponse(stream, "ERROR| Tên thư mục không hợp lệ");
+                    return;
+                }
 
+                string dirPath = Path.Combine(storagePath, username, dirName);
                 Directory.CreateDirectory(dirPath);
                 SendResponse(stream, "SUCCESS| Đã tạo thư mục thành công");
             }
@@ -346,15 +374,15 @@ namespace Server
 
         static void HandleDelete(string[] parts, string username, NetworkStream stream)
         {
-            if (parts.Length != 2)
+            if (parts.Length != 3)
             {
-                SendResponse(stream, "ERROR| Định dạng xóa không hợp lệ");
+                SendResponse(stream, $"ERROR| Định dạng xóa không hợp lệ: Cần 3 phần, nhận được {parts.Length}");
                 return;
             }
 
             try
             {
-                string itemName = parts[1];
+                string itemName = parts[2];
                 string itemPath = Path.Combine(storagePath, username, itemName);
 
                 if (File.Exists(itemPath))
@@ -369,7 +397,7 @@ namespace Server
                 }
                 else
                 {
-                    SendResponse(stream, "ERROR| Không tìm thấy mục");
+                    SendResponse(stream, "ERROR 폶Không tìm thấy mục");
                 }
             }
             catch (Exception ex)
@@ -382,7 +410,7 @@ namespace Server
         {
             try
             {
-                byte[] data = Encoding.UTF8.GetBytes(response);
+                byte[] data = Encoding.UTF8.GetBytes(response + "\n");
                 stream.Write(data, 0, data.Length);
                 stream.Flush();
                 Console.WriteLine($"Đã gửi phản hồi: {response}");
@@ -394,4 +422,3 @@ namespace Server
         }
     }
 }
-
