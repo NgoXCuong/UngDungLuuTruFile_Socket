@@ -13,6 +13,9 @@ namespace Client
         private TcpClient client;
         private NetworkStream stream;
 
+        ///////////////
+        private string currentDirectory = "";
+
         public string CurrentUser { get; set; }
 
         public MainForm()
@@ -37,9 +40,15 @@ namespace Client
             {
                 btnDelete.Enabled = false;
                 btnDownload.Enabled = false;
+                btnUpload.Enabled = true;
+
                 listFoder.Items.Clear();
 
-                await SendRequestAsync($"LIST|{CurrentUser}");
+                // Construct and send LIST command based on current directory
+                string listCommand = string.IsNullOrEmpty(currentDirectory) ?
+                    $"LIST|{CurrentUser}" : $"LIST|{CurrentUser}|{currentDirectory}";
+                Console.WriteLine($"[RefreshFileList] Sending: {listCommand}");
+                await SendRequestAsync(listCommand);
                 string response = await ReceiveResponseAsync();
 
                 if (response.StartsWith("SUCCESS"))
@@ -56,12 +65,26 @@ namespace Client
                 {
                     MessageBox.Show(response, "Lỗi danh sách tệp", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+
+                UpdateCurrentPathLabel();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi làm mới danh sách tệp: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 RedirectToLogin();
             }
+        }
+
+        //////////
+        private void UpdateCurrentPathLabel()
+        {
+            // Update label or use MessageBox if lblCurrentPath is not added
+            string pathDisplay = string.IsNullOrEmpty(currentDirectory) ? "Root" : currentDirectory + "/";
+            if (lblCurrentPath != null)
+            {
+                lblCurrentPath.Text = $"Thư mục hiện tại: {pathDisplay}";
+            }
+            Console.WriteLine($"[UI] Current directory: {pathDisplay}");
         }
 
         public void SetConnection(TcpClient tcpClient, NetworkStream networkStream)
@@ -162,13 +185,30 @@ namespace Client
             }
             btnDelete.Enabled = false;
             btnDownload.Enabled = false;
+
+            ////////////////
+            btnUpload.Enabled = true;
+
             await RefreshFileListAsync();
         }
 
+        ///////////
         private async void btnUpload_Click(object sender, EventArgs e)
         {
             try
             {
+                // Check if a directory is selected
+                string targetDirectory = currentDirectory;
+                if (listFoder.SelectedItem != null)
+                {
+                    FileItem selectedItem = listFoder.SelectedItem as FileItem;
+                    if (selectedItem != null && selectedItem.IsDirectory)
+                    {
+                        targetDirectory = string.IsNullOrEmpty(currentDirectory) ?
+                            selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
+                    }
+                }
+
                 using (OpenFileDialog ofd = new OpenFileDialog())
                 {
                     if (ofd.ShowDialog() == DialogResult.OK)
@@ -176,7 +216,7 @@ namespace Client
                         string filename = Path.GetFileName(ofd.FileName);
                         if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
                         {
-                            MessageBox.Show("Tên tệp chứa ký tự không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            MessageBox.Show($"Tên tệp chứa ký tự không hợp lệ: {filename}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             return;
                         }
 
@@ -203,8 +243,19 @@ namespace Client
                         }
 
                         string base64Data = Convert.ToBase64String(fileData);
-                        Console.WriteLine($"[Upload] File: {filename}, Size: {fileData.Length} bytes, Base64 length: {base64Data.Length}");
-                        string request = $"UPLOAD|{CurrentUser}|{filename}|{base64Data}";
+                        Console.WriteLine($"[Upload] File: {filename}, Size: {fileData.Length} bytes, Base64: {base64Data}, Target directory: {(string.IsNullOrEmpty(targetDirectory) ? "Root" : targetDirectory)}");
+
+                        // Construct and normalize target path
+                        string targetPath = string.IsNullOrEmpty(targetDirectory) ?
+                            filename : $"{targetDirectory}/{filename}";
+                        targetPath = targetPath.Replace("\\", "/").TrimEnd('/').Trim();
+                        Console.WriteLine($"[Upload] Target path: {targetPath}");
+
+                        // Show target directory in UI
+                        string pathDisplay = string.IsNullOrEmpty(targetDirectory) ? "Root" : targetDirectory + "/";
+                        MessageBox.Show($"Đang tải lên vào: {pathDisplay}", "Thông tin", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        string request = $"UPLOAD|{CurrentUser}|{targetPath}|{base64Data}";
                         await SendRequestAsync(request);
                         string response = await ReceiveResponseAsync();
 
@@ -219,6 +270,75 @@ namespace Client
                 RedirectToLogin();
             }
         }
+
+        //private async void btnUpload_Click(object sender, EventArgs e)
+        //{
+        //    try
+        //    {
+        //        using (OpenFileDialog ofd = new OpenFileDialog())
+        //        {
+        //            if (ofd.ShowDialog() == DialogResult.OK)
+        //            {
+        //                string filename = Path.GetFileName(ofd.FileName);
+        //                if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
+        //                {
+        //                    MessageBox.Show("Tên tệp chứa ký tự không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //                    return;
+        //                }
+
+        //                byte[] fileData;
+        //                try
+        //                {
+        //                    fileData = File.ReadAllBytes(ofd.FileName);
+        //                }
+        //                catch (Exception ex)
+        //                {
+        //                    MessageBox.Show($"Không thể đọc tệp: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //                    return;
+        //                }
+
+        //                if (fileData.Length == 0)
+        //                {
+        //                    MessageBox.Show("Tệp rỗng, không thể tải lên.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //                    return;
+        //                }
+        //                if (fileData.Length > 100 * 1024 * 1024)
+        //                {
+        //                    MessageBox.Show("Tệp quá lớn (giới hạn 100MB).", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //                    return;
+        //                }
+
+        //                string base64Data = Convert.ToBase64String(fileData);
+        //                Console.WriteLine($"[Upload] File: {filename}, Size: {fileData.Length} bytes, Base64 length: {base64Data.Length}");
+
+        //                ////////////////////
+        //                string targetPath = filename; // Default to root directory
+        //                if (listFoder.SelectedItem != null)
+        //                {
+        //                    FileItem selectedItem = listFoder.SelectedItem as FileItem;
+        //                    if (selectedItem != null && selectedItem.IsDirectory)
+        //                    {
+        //                        targetPath = $"{selectedItem.Name}/{filename}";
+        //                        Console.WriteLine($"[Upload] Target directory: {selectedItem.Name}");
+        //                    }
+        //                }
+        //                /////////////////
+
+        //                string request = $"UPLOAD|{CurrentUser}|{filename}|{base64Data}";
+        //                await SendRequestAsync(request);
+        //                string response = await ReceiveResponseAsync();
+
+        //                MessageBox.Show(response, "Kết quả tải lên", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+        //                await RefreshFileListAsync();
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        MessageBox.Show($"Lỗi khi tải lên: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //        RedirectToLogin();
+        //    }
+        //}
 
         private async void btnDownload_Click(object sender, EventArgs e)
         {
@@ -237,7 +357,11 @@ namespace Client
 
             try
             {
-                string filename = selectedItem.Name;
+                ////////////////
+                string filename = string.IsNullOrEmpty(currentDirectory) ? 
+                    selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
+
+                //string filename = selectedItem.Name;
                 await SendRequestAsync($"DOWNLOAD|{CurrentUser}|{filename}");
                 string response = await ReceiveResponseAsync();
 
@@ -280,7 +404,13 @@ namespace Client
                         MessageBox.Show("Tên thư mục chứa ký tự không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
-                    await SendRequestAsync($"CREATE_DIR|{CurrentUser}|{dirName}");
+
+                    ////////////////////
+                    string targetDir = string.IsNullOrEmpty(currentDirectory) ?
+                        dirName : $"{currentDirectory}/{dirName}";
+                    await SendRequestAsync($"CREATE_DIR|{CurrentUser}|{targetDir}");
+
+                    //await SendRequestAsync($"CREATE_DIR|{CurrentUser}|{dirName}");
                     string response = await ReceiveResponseAsync();
                     MessageBox.Show(response, "Kết quả tạo thư mục", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                     await RefreshFileListAsync();
@@ -310,7 +440,12 @@ namespace Client
 
             try
             {
-                await SendRequestAsync($"DELETE|{CurrentUser}|{selectedItem.Name}");
+                /////////////////////
+                string targetItem = string.IsNullOrEmpty(currentDirectory) ?
+                    selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
+                await SendRequestAsync($"DELETE|{CurrentUser}|{targetItem}");
+
+                //await SendRequestAsync($"DELETE|{CurrentUser}|{selectedItem.Name}");
                 string response = await ReceiveResponseAsync();
                 MessageBox.Show(response, "Kết quả xóa", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                 await RefreshFileListAsync();
@@ -332,6 +467,33 @@ namespace Client
             bool hasSelection = listFoder.SelectedItem != null;
             btnDelete.Enabled = hasSelection;
             btnDownload.Enabled = hasSelection && (listFoder.SelectedItem as FileItem)?.IsDirectory == false;
+
+            ///////
+            btnUpload.Enabled = true;
+        }
+
+        private async void listFoder_DoubleClick(object sender, EventArgs e)
+        {
+            if (listFoder.SelectedItem != null)
+            {
+                FileItem selectedItem = listFoder.SelectedItem as FileItem;
+                if (selectedItem != null && selectedItem.IsDirectory)
+                {
+                    // Navigate into the selected directory
+                    currentDirectory = string.IsNullOrEmpty(currentDirectory) ?
+                        selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
+                    await RefreshFileListAsync();
+                }
+            }
+        }
+
+        private async void btnBack_Click(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrEmpty(currentDirectory))
+            {
+                currentDirectory = Path.GetDirectoryName(currentDirectory)?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
+                await RefreshFileListAsync();
+            }
         }
     }
 }

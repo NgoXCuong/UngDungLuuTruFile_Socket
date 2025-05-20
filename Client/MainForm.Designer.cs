@@ -39,6 +39,8 @@
             this.btnDownload = new System.Windows.Forms.Button();
             this.btnUpload = new System.Windows.Forms.Button();
             this.label1 = new System.Windows.Forms.Label();
+            this.lblCurrentPath = new System.Windows.Forms.Label();
+            this.btnBack = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.panel2.SuspendLayout();
@@ -48,6 +50,8 @@
             // panel1
             // 
             this.panel1.BackColor = System.Drawing.SystemColors.ButtonHighlight;
+            this.panel1.Controls.Add(this.btnBack);
+            this.panel1.Controls.Add(this.lblCurrentPath);
             this.panel1.Controls.Add(this.groupBox2);
             this.panel1.Location = new System.Drawing.Point(1, 60);
             this.panel1.Name = "panel1";
@@ -58,9 +62,9 @@
             // 
             this.groupBox2.Controls.Add(this.listFoder);
             this.groupBox2.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.groupBox2.Location = new System.Drawing.Point(12, 14);
+            this.groupBox2.Location = new System.Drawing.Point(12, 51);
             this.groupBox2.Name = "groupBox2";
-            this.groupBox2.Size = new System.Drawing.Size(607, 375);
+            this.groupBox2.Size = new System.Drawing.Size(607, 345);
             this.groupBox2.TabIndex = 0;
             this.groupBox2.TabStop = false;
             this.groupBox2.Text = "Thư mục";
@@ -71,9 +75,10 @@
             this.listFoder.ItemHeight = 20;
             this.listFoder.Location = new System.Drawing.Point(7, 26);
             this.listFoder.Name = "listFoder";
-            this.listFoder.Size = new System.Drawing.Size(594, 344);
+            this.listFoder.Size = new System.Drawing.Size(594, 304);
             this.listFoder.TabIndex = 0;
             this.listFoder.SelectedIndexChanged += new System.EventHandler(this.listFoder_SelectedIndexChanged);
+            this.listFoder.DoubleClick += new System.EventHandler(this.listFoder_DoubleClick);
             // 
             // panel2
             // 
@@ -141,12 +146,36 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 20.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label1.Location = new System.Drawing.Point(322, 9);
+            this.label1.BackColor = System.Drawing.SystemColors.ActiveCaption;
+            this.label1.Font = new System.Drawing.Font("Roboto", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label1.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
+            this.label1.Location = new System.Drawing.Point(346, 9);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(276, 31);
+            this.label1.Size = new System.Drawing.Size(313, 38);
             this.label1.TabIndex = 2;
             this.label1.Text = "Ứng dụng lưu trữ file";
+            // 
+            // lblCurrentPath
+            // 
+            this.lblCurrentPath.AutoSize = true;
+            this.lblCurrentPath.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblCurrentPath.Location = new System.Drawing.Point(15, 14);
+            this.lblCurrentPath.Name = "lblCurrentPath";
+            this.lblCurrentPath.Size = new System.Drawing.Size(168, 20);
+            this.lblCurrentPath.TabIndex = 3;
+            this.lblCurrentPath.Text = "Thư mục hiện tại: Root";
+            // 
+            // btnBack
+            // 
+            this.btnBack.BackColor = System.Drawing.SystemColors.ButtonFace;
+            this.btnBack.Font = new System.Drawing.Font("Microsoft Sans Serif", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnBack.Location = new System.Drawing.Point(524, 17);
+            this.btnBack.Name = "btnBack";
+            this.btnBack.Size = new System.Drawing.Size(89, 28);
+            this.btnBack.TabIndex = 4;
+            this.btnBack.Text = "Quay lại";
+            this.btnBack.UseVisualStyleBackColor = false;
+            this.btnBack.Click += new System.EventHandler(this.btnBack_Click);
             // 
             // MainForm
             // 
@@ -164,6 +193,7 @@
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.MainForm_FormClosing);
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.panel1.ResumeLayout(false);
+            this.panel1.PerformLayout();
             this.groupBox2.ResumeLayout(false);
             this.panel2.ResumeLayout(false);
             this.groupBox1.ResumeLayout(false);
@@ -183,5 +213,7 @@
         private System.Windows.Forms.Button btnCreate;
         private System.Windows.Forms.Button btnDownload;
         private System.Windows.Forms.Button btnUpload;
+        private System.Windows.Forms.Label lblCurrentPath;
+        private System.Windows.Forms.Button btnBack;
     }
 }

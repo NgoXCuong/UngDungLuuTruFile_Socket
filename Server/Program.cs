@@ -12,7 +12,7 @@ namespace Server
 {
     internal class Program
     {
-        private static readonly string storagePath = Path.Combine(Directory.GetCurrentDirectory(), "ServerStorage");
+        private static readonly string storagePath = Path.Combine(Directory.GetCurrentDirectory(), "ServerUngDungLuuTru");
         private static readonly string usersFile = "users.txt";
         private static readonly Dictionary<string, string> users = new Dictionary<string, string>();
         private static readonly int MaxConnections = 100;
@@ -156,7 +156,10 @@ namespace Server
                                     switch (command)
                                     {
                                         case "LIST":
-                                            HandleList(currentUser, stream);
+                                            /////////
+                                            HandleList(parts, currentUser, stream);
+
+                                            //HandleList(currentUser, stream);
                                             break;
                                         case "UPLOAD":
                                             HandleUpload(parts, currentUser, stream);
@@ -254,12 +257,19 @@ namespace Server
                 return null;
             }
         }
-
-        static void HandleList(string username, NetworkStream stream)
+        ////////////
+        static void HandleList(string[] parts, string username, NetworkStream stream)
         {
             try
             {
-                string userPath = Path.Combine(storagePath, username);
+                string targetPath = parts.Length > 2 ? parts[2] : "";
+                string userPath = Path.Combine(storagePath, username, targetPath.Replace('/', Path.DirectorySeparatorChar));
+                Console.WriteLine($"[HandleList] Listing path: {userPath}");
+                if (!Directory.Exists(userPath))
+                {
+                    SendResponse(stream, "ERROR| Thư mục không tồn tại");
+                    return;
+                }
                 var files = Directory.GetFiles(userPath).Select(f => $"[File]{Path.GetFileName(f)}");
                 var dirs = Directory.GetDirectories(userPath).Select(d => $"[Dir]{Path.GetFileName(d)}");
                 string result = string.Join("|", files.Concat(dirs));
@@ -271,6 +281,22 @@ namespace Server
             }
         }
 
+
+        //static void HandleList(string username, NetworkStream stream)
+        //{
+        //    try
+        //    {
+        //        string userPath = Path.Combine(storagePath, username);
+        //        var files = Directory.GetFiles(userPath).Select(f => $"[File]{Path.GetFileName(f)}");
+        //        var dirs = Directory.GetDirectories(userPath).Select(d => $"[Dir]{Path.GetFileName(d)}");
+        //        string result = string.Join("|", files.Concat(dirs));
+        //        SendResponse(stream, $"SUCCESS|{result}");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        SendResponse(stream, $"ERROR| Không thể liệt kê các tập tin: {ex.Message}");
+        //    }
+        //}
         static void HandleUpload(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 4)
@@ -281,13 +307,29 @@ namespace Server
 
             try
             {
-                string filename = parts[2];
+                string targetPath = parts[2].Trim();
                 string fileData = parts[3];
-                if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
+
+                // Normalize path: remove extra slashes, trim trailing slash
+                targetPath = targetPath.Replace("//", "/").TrimEnd('/');
+                Console.WriteLine($"[HandleUpload] Normalized targetPath: {targetPath}");
+
+                // Validate targetPath
+                if (string.IsNullOrEmpty(targetPath) || targetPath.Contains("..") || targetPath.Contains("\\") || Path.GetInvalidPathChars().Any(targetPath.Contains))
                 {
-                    SendResponse(stream, "ERROR| Tên tệp không hợp lệ");
+                    SendResponse(stream, "ERROR| Đường dẫn tệp không hợp lệ");
                     return;
                 }
+
+                // Validate filename
+                string filename = Path.GetFileName(targetPath);
+                Console.WriteLine($"[HandleUpload] Filename: {filename}");
+                if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
+                {
+                    SendResponse(stream, $"ERROR| Tên tệp không hợp lệ: {filename}");
+                    return;
+                }
+
                 if (string.IsNullOrEmpty(fileData))
                 {
                     SendResponse(stream, "ERROR| Dữ liệu tệp trống");
@@ -301,8 +343,18 @@ namespace Server
                     return;
                 }
 
-                string filePath = Path.Combine(storagePath, username, filename);
-                File.WriteAllBytes(filePath, data);
+                string userPath = Path.Combine(storagePath, username);
+                string fullFilePath = Path.Combine(userPath, targetPath.Replace('/', Path.DirectorySeparatorChar));
+                Console.WriteLine($"[HandleUpload] Full file path: {fullFilePath}");
+
+                string directoryPath = Path.GetDirectoryName(fullFilePath);
+                if (!string.IsNullOrEmpty(directoryPath))
+                {
+                    Directory.CreateDirectory(directoryPath);
+                    Console.WriteLine($"[HandleUpload] Created directory: {directoryPath}");
+                }
+
+                File.WriteAllBytes(fullFilePath, data);
                 SendResponse(stream, "SUCCESS| Tệp đã được tải lên");
             }
             catch (FormatException)
@@ -314,6 +366,84 @@ namespace Server
                 SendResponse(stream, $"ERROR| Tải lên thất bại: {ex.Message}");
             }
         }
+
+        //static void HandleUpload(string[] parts, string username, NetworkStream stream)
+        //{
+        //    if (parts.Length != 4)
+        //    {
+        //        SendResponse(stream, $"ERROR| Định dạng tải lên không hợp lệ: Cần 4 phần, nhận được {parts.Length}");
+        //        return;
+        //    }
+
+        //    try
+        //    {
+        //        //////////////////
+        //        string targetPath = parts[2].Trim(); // Đường dẫn đích
+
+        //        //string filename = parts[2];
+        //        string fileData = parts[3];
+
+        //        ////////
+        //        targetPath = targetPath.Replace("//", "/").TrimEnd('/');
+        //        Console.WriteLine($"[HandleUpload] Target path: {targetPath}"); // Debugging line
+        //        if (string.IsNullOrEmpty(targetPath) || targetPath.Contains("..") || targetPath.Contains("\\") || Path.GetInvalidPathChars().Any(targetPath.Contains))
+        //        {
+        //            SendResponse(stream, "ERROR| Đường dẫn tệp không hợp lệ");
+        //            return;
+        //        }
+
+        //        //////////
+        //        string filename = Path.GetFileName(targetPath);
+        //        Console.WriteLine($"[HandleUpload] Filename: {filename}"); // Debugging line
+
+
+        //        if (string.IsNullOrEmpty(targetPath) || Path.GetInvalidFileNameChars().Any(targetPath.Contains))
+        //        {
+        //            SendResponse(stream, $"ERROR| Tên tệp không hợp lệ {filename}");
+        //            return;
+        //        }
+        //        if (string.IsNullOrEmpty(fileData))
+        //        {
+        //            SendResponse(stream, "ERROR| Dữ liệu tệp trống");
+        //            return;
+        //        }
+
+        //        byte[] data = Convert.FromBase64String(fileData);
+        //        if (data.Length > 100 * 1024 * 1024)
+        //        {
+        //            SendResponse(stream, "ERROR| Tệp quá lớn");
+        //            return;
+        //        }
+
+        //        ///////////////////
+        //        // Construct full file path
+        //        string userPath = Path.Combine(storagePath, username);
+        //        string fullFilePath = Path.Combine(userPath, targetPath.Replace('/', Path.DirectorySeparatorChar));
+        //        Console.WriteLine($"[HandleUpload] Full file path: {fullFilePath}"); // Debugging line
+
+        //        // Ensure the directory exists
+        //        string directoryPath = Path.GetDirectoryName(fullFilePath);
+        //        if (!string.IsNullOrEmpty(directoryPath))
+        //        {
+        //            Directory.CreateDirectory(directoryPath);
+        //        }
+
+        //        File.WriteAllBytes(fullFilePath, data);
+        //        ////////////////////////
+
+        //        //string filePath = Path.Combine(storagePath, username, filename);
+        //        //File.WriteAllBytes(filePath, data);
+        //        SendResponse(stream, "SUCCESS| Tệp đã được tải lên");
+        //    }
+        //    catch (FormatException)
+        //    {
+        //        SendResponse(stream, "ERROR| Dữ liệu tệp không hợp lệ");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        SendResponse(stream, $"ERROR| Tải lên thất bại: {ex.Message}");
+        //    }
+        //}
 
         static void HandleDownload(string[] parts, string username, NetworkStream stream)
         {
@@ -397,7 +527,7 @@ namespace Server
                 }
                 else
                 {
-                    SendResponse(stream, "ERROR 폶Không tìm thấy mục");
+                    SendResponse(stream, "ERROR| Không tìm thấy mục");
                 }
             }
             catch (Exception ex)
