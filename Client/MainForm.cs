@@ -46,7 +46,7 @@ namespace Client
                 // Construct and send LIST command based on current directory
                 string listCommand = string.IsNullOrEmpty(currentDirectory) ?
                     $"LIST|{CurrentUser}" : $"LIST|{CurrentUser}|{currentDirectory}";
-                Console.WriteLine($"[RefreshFileList] Sending: {listCommand}");
+                Console.WriteLine($"[RefreshFileList] Đang gửi: {listCommand}");
                 await SendRequestAsync(listCommand);
                 string response = await ReceiveResponseAsync();
 
@@ -82,7 +82,7 @@ namespace Client
             {
                 lblCurrentPath.Text = $"Thư mục hiện tại: {pathDisplay}";
             }
-            Console.WriteLine($"[UI] Current directory: {pathDisplay}");
+            Console.WriteLine($"[UI] Thư mục hiện tại: {pathDisplay}");
         }
 
         public void SetConnection(TcpClient tcpClient, NetworkStream networkStream)
@@ -104,11 +104,11 @@ namespace Client
                 byte[] data = Encoding.UTF8.GetBytes(request + "\n");
                 await stream.WriteAsync(data, 0, data.Length);
                 await stream.FlushAsync();
-                Console.WriteLine($"[SendRequest] Sent: {request}");
+                Console.WriteLine($"[SendRequest] Gửi: {request}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SendRequest] Error: {ex.Message}");
+                Console.WriteLine($"[SendRequest] Lỗi: {ex.Message}");
                 throw;
             }
         }
@@ -135,12 +135,12 @@ namespace Client
                 } while (bytesRead > 0);
 
                 string response = responseBuilder.ToString().Trim();
-                Console.WriteLine($"[ReceiveResponse] Received: {response}");
+                Console.WriteLine($"[ReceiveResponse] Đã nhận: {response}");
                 return response;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ReceiveResponse] Error: {ex.Message}");
+                Console.WriteLine($"[ReceiveResponse] Lỗi: {ex.Message}");
                 throw;
             }
         }
@@ -153,11 +153,11 @@ namespace Client
                 client?.Close();
                 client = null;
                 stream = null;
-                Console.WriteLine("[Disconnect] Connection closed.");
+                Console.WriteLine("[Disconnect] Đã đóng kêt nối.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Disconnect] Error: {ex.Message}");
+                Console.WriteLine($"[Disconnect] Lỗi: {ex.Message}");
             }
         }
 
@@ -244,7 +244,7 @@ namespace Client
                         string targetPath = string.IsNullOrEmpty(targetDirectory) ?
                             filename : $"{targetDirectory}/{filename}";
                         targetPath = targetPath.Replace("\\", "/").TrimEnd('/').Trim();
-                        Console.WriteLine($"[Upload] Target path: {targetPath}");
+                        Console.WriteLine($"[Upload] Đường dẫn đích: {targetPath}");
 
                         // Show target directory in UI
                         string pathDisplay = string.IsNullOrEmpty(targetDirectory) ? "Root" : targetDirectory + "/";
@@ -390,8 +390,6 @@ namespace Client
             bool hasSelection = listFoder.SelectedItem != null;
             btnDelete.Enabled = hasSelection;
             btnDownload.Enabled = hasSelection && (listFoder.SelectedItem as FileItem)?.IsDirectory == false;
-
-            ///////
             btnUpload.Enabled = true;
         }
 

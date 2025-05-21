@@ -7,6 +7,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 
 namespace Server
 {
@@ -203,6 +204,7 @@ namespace Server
             }
         }
 
+        //Tạo tài khoản mới nếu chưa tồn tại, đồng thời tạo thư mục lưu file cho user đó.
         static void HandleRegister(string[] parts, NetworkStream stream)
         {
             if (parts.Length != 3)
@@ -232,6 +234,7 @@ namespace Server
             }
         }
 
+        //Kiểm tra username/password, trả về "SUCCESS" nếu đúng.
         static string HandleLogin(string[] parts, NetworkStream stream)
         {
             if (parts.Length != 3)
@@ -255,13 +258,14 @@ namespace Server
             }
         }
 
+        //Trả về danh sách file và thư mục trong thư mục user(dưới dạng [File] tên hoặc [Dir] tên).
         static void HandleList(string[] parts, string username, NetworkStream stream)
         {
             try
             {
                 string targetPath = parts.Length > 2 ? parts[2] : "";
                 string userPath = Path.Combine(storagePath, username, targetPath.Replace('/', Path.DirectorySeparatorChar));
-                Console.WriteLine($"[HandleList] Listing path: {userPath}");
+                Console.WriteLine($"[HandleList] Đường dẫn: {userPath}");
                 if (!Directory.Exists(userPath))
                 {
                     SendResponse(stream, "ERROR| Thư mục không tồn tại");
@@ -270,7 +274,7 @@ namespace Server
                 var files = Directory.GetFiles(userPath).Select(f => $"[File]{Path.GetFileName(f)}");
                 var dirs = Directory.GetDirectories(userPath).Select(d => $"[Dir]{Path.GetFileName(d)}");
                 string result = string.Join("|", files.Concat(dirs));
-                SendResponse(stream, $"SUCCESS|{result}");
+                SendResponse(stream, $"SUCCESS| {result}");
             }
             catch (Exception ex)
             {
@@ -278,6 +282,7 @@ namespace Server
             }
         }
 
+        //Nhận đường dẫn và dữ liệu file (base64), ghi vào thư mục user.
         static void HandleUpload(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 4)
@@ -326,13 +331,13 @@ namespace Server
 
                 string userPath = Path.Combine(storagePath, username);
                 string fullFilePath = Path.Combine(userPath, targetPath.Replace('/', Path.DirectorySeparatorChar));
-                Console.WriteLine($"[HandleUpload] Full file path: {fullFilePath}");
+                Console.WriteLine($"[HandleUpload] Đường dẫn file: {fullFilePath}");
 
                 string directoryPath = Path.GetDirectoryName(fullFilePath);
                 if (!string.IsNullOrEmpty(directoryPath))
                 {
                     Directory.CreateDirectory(directoryPath);
-                    Console.WriteLine($"[HandleUpload] Created directory: {directoryPath}");
+                    Console.WriteLine($"[HandleUpload] Tạo thư mục: {directoryPath}");
                 }
 
                 File.WriteAllBytes(fullFilePath, data);
@@ -348,6 +353,7 @@ namespace Server
             }
         }
 
+        //Trả về nội dung file được mã hóa base64.
         static void HandleDownload(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 3)
@@ -365,7 +371,7 @@ namespace Server
                 {
                     byte[] fileData = File.ReadAllBytes(filePath);
                     string base64Data = Convert.ToBase64String(fileData);
-                    SendResponse(stream, $"SUCCESS|{base64Data}");
+                    SendResponse(stream, $"SUCCESS| {base64Data}");
                 }
                 else
                 {
@@ -378,6 +384,7 @@ namespace Server
             }
         }
 
+        //Tạo thư mục con bên trong thư mục của người dùng.
         static void HandleCreateDir(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 3)
@@ -405,6 +412,7 @@ namespace Server
             }
         }
 
+        //Xóa file hoặc thư mục con của user.
         static void HandleDelete(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 3)
@@ -439,6 +447,7 @@ namespace Server
             }
         }
 
+        // Gửi phản hôì cho Client
         static void SendResponse(NetworkStream stream, string response)
         {
             try
