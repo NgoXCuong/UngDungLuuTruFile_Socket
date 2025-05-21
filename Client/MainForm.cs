@@ -13,7 +13,6 @@ namespace Client
         private TcpClient client;
         private NetworkStream stream;
 
-        ///////////////
         private string currentDirectory = "";
 
         public string CurrentUser { get; set; }
@@ -75,7 +74,6 @@ namespace Client
             }
         }
 
-        //////////
         private void UpdateCurrentPathLabel()
         {
             // Update label or use MessageBox if lblCurrentPath is not added
@@ -185,14 +183,11 @@ namespace Client
             }
             btnDelete.Enabled = false;
             btnDownload.Enabled = false;
-
-            ////////////////
             btnUpload.Enabled = true;
 
             await RefreshFileListAsync();
         }
 
-        ///////////
         private async void btnUpload_Click(object sender, EventArgs e)
         {
             try
@@ -271,75 +266,6 @@ namespace Client
             }
         }
 
-        //private async void btnUpload_Click(object sender, EventArgs e)
-        //{
-        //    try
-        //    {
-        //        using (OpenFileDialog ofd = new OpenFileDialog())
-        //        {
-        //            if (ofd.ShowDialog() == DialogResult.OK)
-        //            {
-        //                string filename = Path.GetFileName(ofd.FileName);
-        //                if (string.IsNullOrEmpty(filename) || Path.GetInvalidFileNameChars().Any(filename.Contains))
-        //                {
-        //                    MessageBox.Show("Tên tệp chứa ký tự không hợp lệ.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        //                    return;
-        //                }
-
-        //                byte[] fileData;
-        //                try
-        //                {
-        //                    fileData = File.ReadAllBytes(ofd.FileName);
-        //                }
-        //                catch (Exception ex)
-        //                {
-        //                    MessageBox.Show($"Không thể đọc tệp: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        //                    return;
-        //                }
-
-        //                if (fileData.Length == 0)
-        //                {
-        //                    MessageBox.Show("Tệp rỗng, không thể tải lên.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        //                    return;
-        //                }
-        //                if (fileData.Length > 100 * 1024 * 1024)
-        //                {
-        //                    MessageBox.Show("Tệp quá lớn (giới hạn 100MB).", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        //                    return;
-        //                }
-
-        //                string base64Data = Convert.ToBase64String(fileData);
-        //                Console.WriteLine($"[Upload] File: {filename}, Size: {fileData.Length} bytes, Base64 length: {base64Data.Length}");
-
-        //                ////////////////////
-        //                string targetPath = filename; // Default to root directory
-        //                if (listFoder.SelectedItem != null)
-        //                {
-        //                    FileItem selectedItem = listFoder.SelectedItem as FileItem;
-        //                    if (selectedItem != null && selectedItem.IsDirectory)
-        //                    {
-        //                        targetPath = $"{selectedItem.Name}/{filename}";
-        //                        Console.WriteLine($"[Upload] Target directory: {selectedItem.Name}");
-        //                    }
-        //                }
-        //                /////////////////
-
-        //                string request = $"UPLOAD|{CurrentUser}|{filename}|{base64Data}";
-        //                await SendRequestAsync(request);
-        //                string response = await ReceiveResponseAsync();
-
-        //                MessageBox.Show(response, "Kết quả tải lên", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-        //                await RefreshFileListAsync();
-        //            }
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        MessageBox.Show($"Lỗi khi tải lên: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        //        RedirectToLogin();
-        //    }
-        //}
-
         private async void btnDownload_Click(object sender, EventArgs e)
         {
             if (listFoder.SelectedItem == null)
@@ -357,7 +283,6 @@ namespace Client
 
             try
             {
-                ////////////////
                 string filename = string.IsNullOrEmpty(currentDirectory) ? 
                     selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
 
@@ -405,7 +330,6 @@ namespace Client
                         return;
                     }
 
-                    ////////////////////
                     string targetDir = string.IsNullOrEmpty(currentDirectory) ?
                         dirName : $"{currentDirectory}/{dirName}";
                     await SendRequestAsync($"CREATE_DIR|{CurrentUser}|{targetDir}");
@@ -440,7 +364,6 @@ namespace Client
 
             try
             {
-                /////////////////////
                 string targetItem = string.IsNullOrEmpty(currentDirectory) ?
                     selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
                 await SendRequestAsync($"DELETE|{CurrentUser}|{targetItem}");
