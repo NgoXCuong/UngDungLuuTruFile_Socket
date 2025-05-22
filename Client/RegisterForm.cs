@@ -21,7 +21,7 @@ namespace Client
         {
             try
             {
-                // Disable UI during registration
+                // vô hiệu hóa các điều khiển và hiển thị con trỏ chờ trong khi đang xử lý
                 btnRegister.Enabled = false;
                 btnExit.Enabled = false;
                 lbRegister.Enabled = false;
@@ -42,7 +42,7 @@ namespace Client
                     return;
                 }
 
-                // Connect to server
+                // Kết nối đến server
                 client = new TcpClient();
                 try
                 {
@@ -57,7 +57,7 @@ namespace Client
                 string username = txtUserName.Text.Trim();
                 string password = txtPassword.Text.Trim();
 
-                // Send REGISTER request
+                // Gửi phản hồi đăng ký đến server
                 await SendRequestAsync($"REGISTER|{username}|{password}");
                 string response = await ReceiveResponseAsync();
 
@@ -106,6 +106,7 @@ namespace Client
             Disconnect();
         }
 
+        // Khai báo 1 phương thức bất đồng bộ để gửi yêu cầu đến server
         private async Task SendRequestAsync(string request)
         {
             try
@@ -119,44 +120,47 @@ namespace Client
                 byte[] data = Encoding.UTF8.GetBytes(request + "\n");
                 await stream.WriteAsync(data, 0, data.Length);
                 await stream.FlushAsync();
-                Console.WriteLine($"[SendRequest] Sent: {request}");
+                Console.WriteLine($"[SendRequest] Gửi: {request}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SendRequest] Error: {ex.Message}");
+                Console.WriteLine($"[SendRequest] Lỗi: {ex.Message}");
                 throw;
             }
         }
 
+        // Khai báo 1 phương thức bất đồng bộ để nhận phản hồi từ server
         private async Task<string> ReceiveResponseAsync()
         {
             try
             {
-                byte[] buffer = new byte[8192];
-                StringBuilder responseBuilder = new StringBuilder();
-                int bytesRead;
+                byte[] buffer = new byte[8192]; // lưu dữ liệu nhận được từ server (8KB).
 
-                // Read until newline is found
+                // ghép nối các phần dữ liệu đọc được thành chuỗi hoàn chỉnh.
+                StringBuilder responseBuilder = new StringBuilder(); 
+                int bytesRead; // số byte đọc được trong mỗi lần ReadAsync
+
                 do
                 {
+                    // đọc dữ liệu một cách bất đồng bộ từ stream
                     bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
                     if (bytesRead == 0)
                         throw new IOException("Server đã đóng kết nối.");
 
                     string chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    responseBuilder.Append(chunk);
+                    responseBuilder.Append(chunk); // để ghép nối các phần dữ liệu.
 
                     if (chunk.Contains("\n"))
                         break;
                 } while (bytesRead > 0);
 
                 string response = responseBuilder.ToString().Trim();
-                Console.WriteLine($"[ReceiveResponse] Received: {response}");
+                Console.WriteLine($"[ReceiveResponse] Đã nhận: {response}");
                 return response;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ReceiveResponse] Error: {ex.Message}");
+                Console.WriteLine($"[ReceiveResponse] Lỗi: {ex.Message}");
                 throw;
             }
         }
@@ -165,15 +169,16 @@ namespace Client
         {
             try
             {
-                stream?.Close();
+                // Gọi phương thức Close() để đóng stream và client nếu đồi tượn khác null
+                stream?.Close(); 
                 client?.Close();
-                client = null;
+                client = null; // Giải phóng tài nguyên
                 stream = null;
-                Console.WriteLine("[Disconnect] Connection closed.");
+                Console.WriteLine("[Disconnect] Đóng kết nối.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Disconnect] Error: {ex.Message}");
+                Console.WriteLine($"[Disconnect] Lỗi: {ex.Message}");
             }
         }
     }
