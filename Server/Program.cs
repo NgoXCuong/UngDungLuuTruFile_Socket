@@ -15,7 +15,11 @@ namespace Server
     {
         private static readonly string storagePath = Path.Combine(Directory.GetCurrentDirectory(), "ServerUngDungLuuTru");
         private static readonly string usersFile = "users.txt";
+
+        // Lưu trữ thông tin người dùng (username:password) trong bộ nhớ
         private static readonly Dictionary<string, string> users = new Dictionary<string, string>();
+
+        // Giới hạn số lượng kết nối đồng thời
         private static readonly int MaxConnections = 100;
         private static int currentConnections = 0;
 
@@ -25,6 +29,7 @@ namespace Server
             Console.InputEncoding = Encoding.UTF8;
 
             LoadUsers();
+            // Tạo thư mục lưu trữ nếu chưa tồn tại
             Directory.CreateDirectory(storagePath);
 
             TcpListener listener = new TcpListener(IPAddress.Any, 5000);
@@ -41,8 +46,11 @@ namespace Server
                         Thread.Sleep(1000);
                         continue;
                     }
+                    // Chấp nhận kết nối từ client
                     TcpClient client = listener.AcceptTcpClient();
                     Interlocked.Increment(ref currentConnections);
+
+                    // Tạo luồng xử lý riêng cho client
                     Thread clientThread = new Thread(() => HandleClient(client));
                     clientThread.Start();
                 }
@@ -59,12 +67,17 @@ namespace Server
             {
                 foreach (var line in File.ReadAllLines(usersFile))
                 {
+                    // Tách dòng thành các phần: username và password bằng dấu ':'
                     var parts = line.Split(':');
+
+                    // Nếu dòng hợp lệ (chỉ có 2 phần: tên đăng nhập và mật khẩu)
+                    // Lưu vào Dictionary users với username là key, password là value
                     if (parts.Length == 2) users[parts[0]] = parts[1];
                 }
             }
         }
 
+        // Phương thức HashPassword: Mã hóa mật khẩu bằng thuật toán băm SHA256
         static string HashPassword(string password)
         {
             using (SHA256 sha256 = SHA256.Create())
@@ -72,6 +85,7 @@ namespace Server
                 byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
                 StringBuilder builder = new StringBuilder();
                 foreach (byte b in bytes)
+                    // Chuyển từng byte sang dạng hex 2 chữ số (lowercase)
                     builder.Append(b.ToString("x2"));
                 return builder.ToString();
             }
@@ -80,7 +94,11 @@ namespace Server
         static void SaveUser(string username, string password)
         {
             string hashedPassword = HashPassword(password);
+            // Ghi thông tin tài khoản (username:hashedPassword) vào cuối file
+            // Mỗi dòng chứa một tài khoản, phân cách bởi dấu :
             File.AppendAllText(usersFile, $"{username}:{hashedPassword}\n");
+
+            // Cập nhật vào dictionary 'users' để lưu trữ trong bộ nhớ
             users[username] = hashedPassword;
         }
 
@@ -92,14 +110,15 @@ namespace Server
             try
             {
                 stream = client.GetStream();
-                stream.ReadTimeout = 10000;
-                byte[] buffer = new byte[8192];
+                stream.ReadTimeout = 10000; // Đặt timeout đọc là 10 giây
+                byte[] buffer = new byte[8192]; // Bộ đệm đọc dữ liệu
                 StringBuilder incomingData = new StringBuilder();
 
                 while (client.Connected)
                 {
                     try
                     {
+                        // Nếu chưa có dữ liệu, chờ một chút
                         if (!stream.DataAvailable)
                         {
                             Thread.Sleep(50);
@@ -113,11 +132,14 @@ namespace Server
                             break;
                         }
 
+                        // Giải mã dữ liệu nhận được
                         string chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                         incomingData.Append(chunk);
 
                         string data = incomingData.ToString();
                         int newlineIndex;
+
+                        // Xử lý từng dòng (mỗi lệnh kết thúc bằng '\n')
                         while ((newlineIndex = data.IndexOf('\n')) >= 0)
                         {
                             string request = data.Substring(0, newlineIndex).Trim();
@@ -128,6 +150,8 @@ namespace Server
                             if (string.IsNullOrEmpty(request)) continue;
 
                             Console.WriteLine($"Đã nhận được yêu cầu: {request} (currentUser: {currentUser ?? "null"})");
+
+                            // Phân tích yêu cầu thành mảng: lệnh|tham số1|tham số2|...
                             var parts = request.Split('|');
                             string command = parts[0].ToUpperInvariant();
 
