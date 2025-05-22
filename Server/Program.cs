@@ -290,18 +290,42 @@ namespace Server
                 string targetPath = parts.Length > 2 ? parts[2] : "";
                 string userPath = Path.Combine(storagePath, username, targetPath.Replace('/', Path.DirectorySeparatorChar));
                 Console.WriteLine($"[HandleList] Đường dẫn: {userPath}");
+
                 if (!Directory.Exists(userPath))
                 {
                     SendResponse(stream, "ERROR| Thư mục không tồn tại");
                     return;
                 }
-                var files = Directory.GetFiles(userPath).Select(f => $"[File]{Path.GetFileName(f)}");
-                var dirs = Directory.GetDirectories(userPath).Select(d => $"[Dir]{Path.GetFileName(d)}");
-                string result = string.Join("|", files.Concat(dirs));
-                SendResponse(stream, $"SUCCESS| {result}");
+
+                var items = new List<string>();
+
+                // Lấy tất cả thư mục trước
+                var directories = Directory.GetDirectories(userPath);
+                foreach (var dir in directories)
+                {
+                    string dirName = Path.GetFileName(dir);
+                    items.Add($"[Dir]{dirName}");
+                    Console.WriteLine($"[HandleList] Thêm thư mục: [Dir]{dirName}");
+                }
+
+                // Sau đó lấy tất cả file
+                var files = Directory.GetFiles(userPath);
+                foreach (var file in files)
+                {
+                    string fileName = Path.GetFileName(file);
+                    items.Add($"[File]{fileName}");
+                    Console.WriteLine($"[HandleList] Thêm file: [File]{fileName}");
+                }
+
+                // Nối tất cả items với dấu |
+                string result = string.Join("|", items);
+                Console.WriteLine($"[HandleList] Kết quả cuối cùng: {result}");
+
+                SendResponse(stream, $"SUCCESS|{result}");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[HandleList] Lỗi: {ex.Message}");
                 SendResponse(stream, $"ERROR| Không thể liệt kê các tập tin: {ex.Message}");
             }
         }
@@ -409,6 +433,34 @@ namespace Server
         }
 
         //Tạo thư mục con bên trong thư mục của người dùng.
+        //static void HandleCreateDir(string[] parts, string username, NetworkStream stream)
+        //{
+        //    if (parts.Length != 3)
+        //    {
+        //        SendResponse(stream, $"ERROR| Định dạng tạo thư mục không hợp lệ: Cần 3 phần, nhận được {parts.Length}");
+        //        return;
+        //    }
+
+        //    try
+        //    {
+        //        string dirName = parts[2];
+        //        if (string.IsNullOrEmpty(dirName) || Path.GetInvalidFileNameChars().Any(dirName.Contains))
+        //        {
+        //            SendResponse(stream, "ERROR| Tên thư mục không hợp lệ");
+        //            return;
+        //        }
+
+        //        string dirPath = Path.Combine(storagePath, username, dirName);
+        //        Directory.CreateDirectory(dirPath);
+        //        SendResponse(stream, "SUCCESS| Đã tạo thư mục thành công");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        SendResponse(stream, $"ERROR| Tạo thư mục thất bại: {ex.Message}");
+        //    }
+        //}
+
+        // Thay thế method HandleCreateDir trong server
         static void HandleCreateDir(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 3)
@@ -419,19 +471,49 @@ namespace Server
 
             try
             {
-                string dirName = parts[2];
-                if (string.IsNullOrEmpty(dirName) || Path.GetInvalidFileNameChars().Any(dirName.Contains))
+                string targetPath = parts[2].Trim();
+
+                // Normalize path: remove extra slashes, handle path separators
+                targetPath = targetPath.Replace("//", "/").TrimEnd('/');
+                Console.WriteLine($"[HandleCreateDir] Target Path: {targetPath}");
+
+                // Validate path
+                if (string.IsNullOrEmpty(targetPath) || targetPath.Contains("..") ||
+                    targetPath.Contains("\\") || Path.GetInvalidPathChars().Any(targetPath.Contains))
                 {
-                    SendResponse(stream, "ERROR| Tên thư mục không hợp lệ");
+                    SendResponse(stream, "ERROR| Đường dẫn thư mục không hợp lệ");
                     return;
                 }
 
-                string dirPath = Path.Combine(storagePath, username, dirName);
-                Directory.CreateDirectory(dirPath);
+                // Validate directory name (final part of path)
+                string dirName = Path.GetFileName(targetPath);
+                if (string.IsNullOrEmpty(dirName) || Path.GetInvalidFileNameChars().Any(dirName.Contains))
+                {
+                    SendResponse(stream, $"ERROR| Tên thư mục không hợp lệ: {dirName}");
+                    return;
+                }
+
+                // Build full path
+                string userPath = Path.Combine(storagePath, username);
+                string fullDirPath = Path.Combine(userPath, targetPath.Replace('/', Path.DirectorySeparatorChar));
+                Console.WriteLine($"[HandleCreateDir] Full Directory Path: {fullDirPath}");
+
+                // Check if directory already exists
+                if (Directory.Exists(fullDirPath))
+                {
+                    SendResponse(stream, "ERROR| Thư mục đã tồn tại");
+                    return;
+                }
+
+                // Create directory (this will create parent directories if needed)
+                Directory.CreateDirectory(fullDirPath);
+                Console.WriteLine($"[HandleCreateDir] Đã tạo thư mục: {fullDirPath}");
+
                 SendResponse(stream, "SUCCESS| Đã tạo thư mục thành công");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[HandleCreateDir] Lỗi: {ex.Message}");
                 SendResponse(stream, $"ERROR| Tạo thư mục thất bại: {ex.Message}");
             }
         }

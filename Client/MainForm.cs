@@ -49,15 +49,44 @@ namespace Client
                 Console.WriteLine($"[RefreshFileList] Đang gửi: {listCommand}");
                 await SendRequestAsync(listCommand);
                 string response = await ReceiveResponseAsync();
+                Console.WriteLine($"[RefreshFileList] Nhận được response: {response}");
 
                 if (response.StartsWith("SUCCESS"))
                 {
-                    var parts = response.Split('|').Skip(1).Where(x => !string.IsNullOrEmpty(x));
-                    foreach (var item in parts)
+                    // Tách response thành các phần, bỏ qua phần "SUCCESS"
+                    var responseParts = response.Split('|');
+                    Console.WriteLine($"[RefreshFileList] Số phần trong response: {responseParts.Length}");
+
+                    // Bắt đầu từ index 1 để bỏ qua "SUCCESS"
+                    for (int i = 1; i < responseParts.Length; i++)
                     {
-                        bool isDir = item.StartsWith("[Dir]");
-                        string name = isDir ? item.Substring(5) : item.Substring(6);
-                        listFoder.Items.Add(new FileItem { Name = name, IsDirectory = isDir });
+                        string item = responseParts[i].Trim();
+                        Console.WriteLine($"[RefreshFileList] Xử lý item: '{item}'");
+
+                        if (string.IsNullOrEmpty(item)) continue;
+
+                        if (item.StartsWith("[Dir]"))
+                        {
+                            string name = item.Substring(5); // Bỏ "[Dir]"
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                listFoder.Items.Add(new FileItem { Name = name, IsDirectory = true });
+                                Console.WriteLine($"[RefreshFileList] Thêm thư mục: {name}");
+                            }
+                        }
+                        else if (item.StartsWith("[File]"))
+                        {
+                            string name = item.Substring(6); // Bỏ "[File]"
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                listFoder.Items.Add(new FileItem { Name = name, IsDirectory = false });
+                                Console.WriteLine($"[RefreshFileList] Thêm file: {name}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[RefreshFileList] Item không hợp lệ: {item}");
+                        }
                     }
                 }
                 else
