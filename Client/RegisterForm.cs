@@ -61,7 +61,10 @@ namespace Client
                 await SendRequestAsync($"REGISTER|{username}|{password}");
                 string response = await ReceiveResponseAsync();
 
-                MessageBox.Show(response.StartsWith("SUCCESS") ? "Đăng ký thành công!" : response, "Kết quả đăng ký", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                MessageBox.Show(response.StartsWith("SUCCESS") 
+                    ? "Đăng ký thành công!" : response, "Kết quả đăng ký",
+                    MessageBoxButtons.OK, response.StartsWith("SUCCESS") 
+                    ? MessageBoxIcon.Information : MessageBoxIcon.Error);
 
                 if (response.StartsWith("SUCCESS"))
                 {

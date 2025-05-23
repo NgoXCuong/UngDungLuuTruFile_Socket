@@ -18,11 +18,13 @@ namespace Client
                 Height = 150,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 Text = caption,
-                StartPosition = FormStartPosition.CenterScreen
+                Font = new System.Drawing.Font("Arial", 12),
+                StartPosition = FormStartPosition.CenterScreen,
             };
-            Label textLabel = new Label() { Left = 50, Top = 20, Text = text };
-            TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 400 };
-            Button confirmation = new Button() { Text = "Ok", Left = 350, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+            Label textLabel = new Label() { Left = 50, Top = 20, Text = text, Width = 150 };
+            TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 300 };
+            textBox.BorderStyle = BorderStyle.FixedSingle;
+            Button confirmation = new Button() { Text = "Ok", Left = 370, Width = 100, Top = 50, Height = 30, DialogResult = DialogResult.OK };
             confirmation.Click += (sender, e) => { prompt.Close(); };
             prompt.Controls.Add(textBox);
             prompt.Controls.Add(confirmation);
