@@ -221,7 +221,7 @@ namespace Client
         {
             try
             {
-                // Check if a directory is selected
+                // Kiểm tra thư mục được chọn
                 string targetDirectory = currentDirectory;
                 if (listFoder.SelectedItem != null)
                 {
@@ -312,7 +312,7 @@ namespace Client
 
             try
             {
-                string filename = string.IsNullOrEmpty(currentDirectory) ? 
+                string filename = string.IsNullOrEmpty(currentDirectory) ?
                     selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
 
                 //string filename = selectedItem.Name;
@@ -346,6 +346,58 @@ namespace Client
             }
         }
 
+        //private async void btnDownload_Click(object sender, EventArgs e)
+        //{
+        //    if (listFoder.SelectedItem == null)
+        //    {
+        //        MessageBox.Show("Vui lòng chọn một tệp để tải xuống.", "Lỗi lựa chọn", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        //        return;
+        //    }
+
+        //    FileItem selectedItem = listFoder.SelectedItem as FileItem;
+        //    if (selectedItem == null || selectedItem.IsDirectory)
+        //    {
+        //        MessageBox.Show("Chỉ có thể tải xuống tệp, không phải thư mục.", "Lỗi lựa chọn", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        //        return;
+        //    }
+
+        //    try
+        //    {
+        //        // Use only the filename, assuming server handles directory structure
+        //        string filename = selectedItem.Name;
+        //        await SendRequestAsync($"DOWNLOAD|{CurrentUser}|{filename}");
+        //        string response = await ReceiveResponseAsync();
+
+        //        if (response.StartsWith("SUCCESS"))
+        //        {
+        //            string[] parts = response.Split('|');
+        //            string base64Data = parts[1];
+        //            Console.WriteLine($"Received Base64 length: {base64Data.Length}");
+        //            byte[] fileData = Convert.FromBase64String(base64Data);
+
+        //            using (SaveFileDialog sfd = new SaveFileDialog())
+        //            {
+        //                sfd.FileName = Path.GetFileName(filename);
+        //                sfd.Filter = "All Files (*.*)|*.*";
+        //                sfd.DefaultExt = Path.GetExtension(filename).TrimStart('.');
+        //                if (sfd.ShowDialog() == DialogResult.OK)
+        //                {
+        //                    File.WriteAllBytes(sfd.FileName, fileData);
+        //                    MessageBox.Show("Tệp đã được tải xuống thành công!", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        //                }
+        //            }
+        //        }
+        //        else
+        //        {
+        //            MessageBox.Show(response, "Tải xuống thất bại", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        MessageBox.Show($"Lỗi khi tải xuống: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        //        RedirectToLogin();
+        //    }
+        //}
         private async void btnCreate_Click(object sender, EventArgs e)
         {
             try
@@ -397,7 +449,6 @@ namespace Client
                     selectedItem.Name : $"{currentDirectory}/{selectedItem.Name}";
                 await SendRequestAsync($"DELETE|{CurrentUser}|{targetItem}");
 
-                //await SendRequestAsync($"DELETE|{CurrentUser}|{selectedItem.Name}");
                 string response = await ReceiveResponseAsync();
                 MessageBox.Show(response, "Kết quả xóa", MessageBoxButtons.OK, response.StartsWith("SUCCESS") ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                 await RefreshFileListAsync();
@@ -437,6 +488,7 @@ namespace Client
             }
         }
 
+        // Quay lại thư mục cha trước đó
         private async void btnBack_Click(object sender, EventArgs e)
         {
             if (!string.IsNullOrEmpty(currentDirectory))

@@ -203,9 +203,9 @@ namespace Server
                             }
                         }
                     }
-                    catch (IOException ex)
+                    catch (IOException ex) 
                     {
-                        Console.WriteLine($"IOException trong HandleClient: {ex.Message}");
+                        Console.WriteLine($"Lỗi IOException trong HandleClient: {ex.Message}");
                         break;
                     }
                     catch (Exception ex)
@@ -333,6 +333,12 @@ namespace Server
         //Nhận đường dẫn và dữ liệu file (base64), ghi vào thư mục user.
         static void HandleUpload(string[] parts, string username, NetworkStream stream)
         {
+            // Kiểm tra định dạng lệnh
+            //Vị trí(chỉ số) Nội dung    Ý nghĩa
+            //parts[0]    "UPLOAD"    Lệnh mà client gửi đến server, ở đây là UPLOAD
+            //parts[1]    "user1" Tên người dùng thực hiện hành động
+            //parts[2]    "folder1/file.txt"  Đường dẫn tệp muốn lưu(tương đối trong user folder)
+            //parts[3]    "VGhpcyBpcyBzb21lIGZpbGUgZGF0YQ==" Dữ liệu tệp (được mã hóa Base64)
             if (parts.Length != 4)
             {
                 SendResponse(stream, $"ERROR| Định dạng tải lên không hợp lệ: Cần 4 phần, nhận được {parts.Length}");
@@ -433,34 +439,6 @@ namespace Server
         }
 
         //Tạo thư mục con bên trong thư mục của người dùng.
-        //static void HandleCreateDir(string[] parts, string username, NetworkStream stream)
-        //{
-        //    if (parts.Length != 3)
-        //    {
-        //        SendResponse(stream, $"ERROR| Định dạng tạo thư mục không hợp lệ: Cần 3 phần, nhận được {parts.Length}");
-        //        return;
-        //    }
-
-        //    try
-        //    {
-        //        string dirName = parts[2];
-        //        if (string.IsNullOrEmpty(dirName) || Path.GetInvalidFileNameChars().Any(dirName.Contains))
-        //        {
-        //            SendResponse(stream, "ERROR| Tên thư mục không hợp lệ");
-        //            return;
-        //        }
-
-        //        string dirPath = Path.Combine(storagePath, username, dirName);
-        //        Directory.CreateDirectory(dirPath);
-        //        SendResponse(stream, "SUCCESS| Đã tạo thư mục thành công");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        SendResponse(stream, $"ERROR| Tạo thư mục thất bại: {ex.Message}");
-        //    }
-        //}
-
-        // Thay thế method HandleCreateDir trong server
         static void HandleCreateDir(string[] parts, string username, NetworkStream stream)
         {
             if (parts.Length != 3)
